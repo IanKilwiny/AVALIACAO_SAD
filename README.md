@@ -6,16 +6,35 @@ Pré-requisitos
 
 - Python 3.10+
 
+Criar o ambiente virtual
+
+```bash
+python -m venv venv
+```
+
+Ativar o ambiente virtual no Windows
+
+```bash
+/venv/Script/activate
+```
+
+Ativar o ambiente virtual no Linux
+
+```bash
+source venv/bin/activate
+
+```
+
 Instalação
 
 ```bash
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 Executar
 
 ```bash
-streamlit run dashboard.py
+streamlit run app..py
 ```
 
 Observações

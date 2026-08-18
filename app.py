@@ -360,34 +360,22 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
+cols = st.columns(5)
 
-with k1:
-    st.metric(
-        "Total de alunos",
-        f"{total_alunos_base:,}".replace(",", "."),
-    )
-
-with k2:
-    st.metric(
-        "Alunos que reservaram",
-        f"{alunos_que_reservaram:,}".replace(",", "."),
-    )
-
-with k3:
+with cols[0]:
     st.metric(
         "Agendamentos",
         f"{total_agendamentos:,}".replace(",", "."),
     )
 
-with k4:
+with cols[1]:
     st.metric(
         "Compareceram",
         f"{presentes:,}".replace(",", "."),
         f"{taxa_comparecimento:.1f}%",
     )
 
-with k5:
+with cols[2]:
     st.metric(
         "Faltaram",
         f"{faltas:,}".replace(",", "."),
@@ -395,7 +383,7 @@ with k5:
         delta_color="inverse",
     )
 
-with k6:
+with cols[3]:
     st.metric(
         "Cancelamentos",
         f"{cancelados:,}".replace(",", "."),
@@ -403,7 +391,7 @@ with k6:
         delta_color="inverse",
     )
 
-with k7:
+with cols[4]:
     st.metric(
         "Média reservas/aluno",
         f"{media_reservas_aluno:.2f}",

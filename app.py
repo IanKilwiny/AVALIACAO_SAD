@@ -208,10 +208,8 @@ if "meal_description" in df.columns:
 # TÍTULO
 # ============================================================
 
-st.title("🍽️ Dashboard de Gestão do Restaurante Universitário")
-st.markdown(
-    "### IFCE Campus Cedro — Reservas, presença, demanda, perfil dos alunos, desperdício e satisfação"
-)
+st.title("Gestão do Restaurante Universitário")
+
 
 st.divider()
 
@@ -672,6 +670,7 @@ with tab2:
         x="reservation_date",
         y=["agendamentos", "presentes", "faltas", "cancelados"],
         markers=True,
+        render_mode="svg",
         title="Evolução diária de reservas, presença, faltas e cancelamentos",
         labels={
             "reservation_date": "Data",
@@ -702,6 +701,7 @@ with tab2:
         x="year_month",
         y=["agendamentos", "presentes", "faltas"],
         markers=True,
+        render_mode="svg",
         title="Evolução mensal dos agendamentos",
         labels={
             "year_month": "Mês",
@@ -1329,18 +1329,39 @@ with tab3:
         )
 
         if len(relation) >= 3:
-            fig = px.scatter(
-                relation,
-                x="nota_satisfacao",
-                y="desperdicio_kg",
-                hover_data=["menu_description", "reservation_date"],
-                trendline="ols",
-                title="Relação entre satisfação e desperdício",
-                labels={
-                    "nota_satisfacao": "Nota média",
-                    "desperdicio_kg": "Desperdício (kg)",
-                },
-            )
+            try:
+                fig = px.scatter(
+                    relation,
+                    x="nota_satisfacao",
+                    y="desperdicio_kg",
+                    hover_data=["menu_description", "reservation_date"],
+                    trendline="ols",
+                    title="Relação entre satisfação e desperdício",
+                    labels={
+                        "nota_satisfacao": "Nota média",
+                        "desperdicio_kg": "Desperdício (kg)",
+                    },
+                )
+            except Exception as e:
+                # If statsmodels isn't installed (required for trendline="ols"),
+                # fall back to a scatter without the trendline and inform the user.
+                st.warning(
+                    "Trendline disabled: biblioteca 'statsmodels' não encontrada.\n"
+                    "Para ativar o ajuste de tendência, ative o venv e execute:\n"
+                    "venv/bin/pip install statsmodels"
+                )
+                fig = px.scatter(
+                    relation,
+                    x="nota_satisfacao",
+                    y="desperdicio_kg",
+                    hover_data=["menu_description", "reservation_date"],
+                    title="Relação entre satisfação e desperdício",
+                    labels={
+                        "nota_satisfacao": "Nota média",
+                        "desperdicio_kg": "Desperdício (kg)",
+                    },
+                )
+
             st.plotly_chart(fig, use_container_width=True)
 
     else:

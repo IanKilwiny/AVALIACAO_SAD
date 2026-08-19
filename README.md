@@ -4,7 +4,7 @@ Painel interativo para análise de agendamentos, faltas, desperdício e satisfa�
 
 Pré-requisitos
 
-- Python 3.10+
+- Python 3.12 ou mais recente (o projeto foi validado com Python 3.14)
 
 Criar o ambiente virtual
 
@@ -15,7 +15,7 @@ python -m venv venv
 Ativar o ambiente virtual no Windows
 
 ```bash
-/venv/Script/activate
+.\venv\Scripts\Activate.ps1
 ```
 
 Ativar o ambiente virtual no Linux
@@ -34,13 +34,15 @@ pip install -r requirements.txt
 Executar
 
 ```bash
-streamlit run app..py
+streamlit run app.py
 ```
 
-Observações
+O aplicativo usa o arquivo `rucedro3.csv`, que deve ficar na mesma pasta do
+`app.py`. Para recriar o ambiente com as versões atuais:
 
-- O arquivo padrão `rucedro.csv` é usado se nenhum CSV for carregado via uploader.
-- É possível fazer upload opcional de dois CSVs:
-  - CSV de desperdício: colunas `menu_id,wasted_kg`
-  - CSV de satisfação: colunas `menu_id,satisfaction_score`
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+streamlit run app.py
+```
 

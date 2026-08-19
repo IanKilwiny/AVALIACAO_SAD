@@ -238,7 +238,7 @@ st.divider()
 # IMPORTANTE: NÃO EXISTE FILTRO POR COMIDA/REFEIÇÃO/CARDÁPIO
 # ============================================================
 
-st.sidebar.header("🔎 Filtros Globais")
+st.sidebar.header("Filtros")
 
 min_date = df["reservation_date"].min()
 max_date = df["reservation_date"].max()
@@ -627,7 +627,7 @@ with tab1:
             names="is_republic_student",
             values="reservas",
             hole=0.5,
-            title="Distribuição das reservas por situação de moradia",
+            title="Alunos de república (Sim) que reservam vs Alunos não de república (Não)",
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -1161,24 +1161,6 @@ with tab3:
             else:
                 st.info("Não há registros de lanches no período.")
 
-        with d2:
-            if not almoco.empty:
-                fig = px.bar(
-                    almoco.sort_values("reservas"),
-                    x="reservas",
-                    y="meal_type",
-                    orientation="h",
-                    text="reservas",
-                    title="🍛 Almoço mais reservado",
-                    labels={
-                        "meal_type": "Refeição",
-                        "reservas": "Reservas",
-                    },
-                )
-                fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Não há registros de almoço no período.")
 
     st.markdown(
         '<div class="section-title">🍽️ Desempenho dos cardápios</div>',

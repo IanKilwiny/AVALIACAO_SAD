@@ -1321,44 +1321,7 @@ with tab3:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        waste_menu = (
-            waste_base.groupby("menu_description")
-            .agg(
-                desperdicio_kg=("total_food_waste_kg", "mean"),
-                refeicoes=("present", "sum"),
-            )
-            .reset_index()
-        )
-
-        waste_menu["kg_por_refeicao"] = (
-            waste_menu["desperdicio_kg"]
-            / waste_menu["refeicoes"].replace(0, pd.NA)
-        )
-
-        waste_menu = waste_menu.dropna(
-            subset=["kg_por_refeicao"]
-        ).sort_values(
-            "kg_por_refeicao",
-            ascending=False,
-        ).head(10)
-
-        fig = px.bar(
-            waste_menu.sort_values("kg_por_refeicao"),
-            x="kg_por_refeicao",
-            y="menu_description",
-            orientation="h",
-            text="kg_por_refeicao",
-            title="Cardápios com maior desperdício por refeição",
-            labels={
-                "menu_description": "Cardápio",
-                "kg_por_refeicao": "Kg/refeição",
-            },
-        )
-        fig.update_traces(
-            texttemplate="%{text:.3f}",
-            textposition="outside",
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # Seção de cardápios por desperdício removida conforme solicitação.
 
     else:
         st.info(
@@ -1416,102 +1379,8 @@ with tab3:
             fig.update_traces(textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
-        satisfaction_menu = (
-            review_df.groupby("menu_description")
-            .agg(
-                nota_media=("review_score", "mean"),
-                avaliacoes=("review_score", "count"),
-            )
-            .reset_index()
-            .sort_values("nota_media", ascending=False)
-        )
-
-        fig = px.bar(
-            satisfaction_menu.head(10).sort_values("nota_media"),
-            x="nota_media",
-            y="menu_description",
-            orientation="h",
-            text="nota_media",
-            title="Cardápios com melhores avaliações",
-            labels={
-                "menu_description": "Cardápio",
-                "nota_media": "Nota média",
-            },
-        )
-        fig.update_traces(
-            texttemplate="%{text:.2f}",
-            textposition="outside",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown(
-            '<div class="section-title">🔗 Satisfação e desperdício</div>',
-            unsafe_allow_html=True,
-        )
-
-        waste_by_service = (
-            df_sched.dropna(
-                subset=["menu_date", "menu_description", "total_food_waste_kg"]
-            )
-            .groupby(["menu_date", "menu_description"], dropna=False)
-            .agg(desperdicio_kg=("total_food_waste_kg", "max"))
-            .reset_index()
-            .groupby("menu_description", dropna=False)
-            .agg(
-                desperdicio_medio_kg=("desperdicio_kg", "mean"),
-                servicos_com_desperdicio=("menu_date", "nunique"),
-            )
-            .reset_index()
-        )
-
-        quality_df = satisfaction_menu.merge(
-            waste_by_service,
-            on="menu_description",
-            how="inner",
-        ).dropna(
-            subset=["nota_media", "desperdicio_medio_kg"]
-        )
-
-        if len(quality_df) >= 2:
-            quality_corr = quality_df["nota_media"].corr(
-                quality_df["desperdicio_medio_kg"]
-            )
-
-            fig = px.scatter(
-                quality_df,
-                x="desperdicio_medio_kg",
-                y="nota_media",
-                size="avaliacoes",
-                hover_name="menu_description",
-                text="menu_description",
-                title="Relação entre nota média e desperdício por cardápio",
-                labels={
-                    "desperdicio_medio_kg": "Desperdício médio por serviço (kg)",
-                    "nota_media": "Nota média",
-                    "avaliacoes": "Avaliações",
-                },
-            )
-            fig.update_traces(textposition="top center")
-            st.plotly_chart(fig, use_container_width=True)
-
-            if abs(quality_corr) < 0.2:
-                relation = "fraca ou inexistente"
-            elif quality_corr > 0:
-                relation = "positiva"
-            else:
-                relation = "negativa"
-
-            st.info(
-                f"A correlação de Pearson entre nota e desperdício é "
-                f"**{quality_corr:.2f}**, indicando uma relação "
-                f"**{relation}**. Isso descreve associação no período e "
-                "não prova causalidade."
-            )
-        else:
-            st.info(
-                "Não há cardápios suficientes com avaliações e desperdício "
-                "registrados para calcular a relação."
-            )
+        # Seções de 'Cardápios com melhores avaliações' e
+        # 'Satisfação e desperdício' removidas conforme solicitação.
 
     else:
         st.info(

@@ -700,6 +700,101 @@ with tab2:
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    monthly["media_periodo"] = monthly["presentes"].mean()
+    production_peak = monthly.loc[monthly["presentes"].idxmax()]
+    production_low = monthly.loc[monthly["presentes"].idxmin()]
+
+    st.markdown(
+        '<div class="section-title">🍲 Planejamento de produção e ocupação</div>',
+        unsafe_allow_html=True,
+    )
+
+    p1, p2 = st.columns(2)
+
+    with p1:
+        production_df = monthly.assign(
+            situacao=monthly["presentes"].ge(monthly["media_periodo"])
+            .map({True: "Acima da média", False: "Abaixo da média"})
+        )
+        fig = px.bar(
+            production_df,
+            x="year_month",
+            y="presentes",
+            color="situacao",
+            text="presentes",
+            title="Refeições servidas por mês",
+            labels={
+                "year_month": "Mês",
+                "presentes": "Refeições servidas",
+                "situacao": "Comparação com a média",
+            },
+            color_discrete_map={
+                "Acima da média": "#dc2626",
+                "Abaixo da média": "#2563eb",
+            },
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with p2:
+        st.metric(
+            "Mês para reforçar a produção",
+            str(production_peak["year_month"]),
+            f"{int(production_peak['presentes'])} refeições servidas",
+        )
+        st.metric(
+            "Mês de menor demanda",
+            str(production_low["year_month"]),
+            f"{int(production_low['presentes'])} refeições servidas",
+            delta_color="inverse",
+        )
+        st.caption(
+            "A recomendação usa o total de refeições efetivamente servidas "
+            "no mês e a média do período filtrado."
+        )
+
+    daily_occupation = (
+        df_sched.groupby("reservation_date")
+        .agg(
+            reservas=("scheduling_id", "count"),
+            servidas=("present", "sum"),
+        )
+        .reset_index()
+    )
+
+    if not daily_occupation.empty:
+        low_occupation_limit = daily_occupation["servidas"].quantile(0.25)
+        low_occupation = daily_occupation[
+            daily_occupation["servidas"] <= low_occupation_limit
+        ]
+
+        fig = px.scatter(
+            daily_occupation,
+            x="reservation_date",
+            y="servidas",
+            size="reservas",
+            color="servidas",
+            title="Dias de baixa ocupação",
+            labels={
+                "reservation_date": "Data",
+                "servidas": "Refeições servidas",
+                "reservas": "Reservas",
+            },
+            color_continuous_scale="Blues",
+        )
+        fig.add_hline(
+            y=low_occupation_limit,
+            line_dash="dash",
+            annotation_text="Limite do quartil inferior",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.info(
+            f"Foram identificados **{len(low_occupation)} dias** no quartil "
+            f"inferior, com até **{low_occupation_limit:.0f} refeições "
+            "servidas**. Esses períodos podem apoiar estudos de redução "
+            "de produção e custos."
+        )
+
     d1, d2 = st.columns(2)
 
     with d1:
@@ -770,6 +865,54 @@ with tab2:
             textposition="outside",
         )
         st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown(
+        '<div class="section-title">🕒 Ausência por turno</div>',
+        unsafe_allow_html=True,
+    )
+
+    shift_df = (
+        df_sched.groupby("shift_description", dropna=False)
+        .agg(
+            agendamentos=("scheduling_id", "count"),
+            faltas=("absent", "sum"),
+            presentes=("present", "sum"),
+        )
+        .reset_index()
+    )
+
+    shift_df["taxa_ausencia"] = (
+        shift_df["faltas"]
+        / shift_df["agendamentos"].replace(0, pd.NA)
+        * 100
+    )
+
+    if not shift_df.empty:
+        fig = px.bar(
+            shift_df.sort_values("taxa_ausencia"),
+            x="taxa_ausencia",
+            y="shift_description",
+            orientation="h",
+            text="taxa_ausencia",
+            title="Índice de ausência por turno",
+            labels={
+                "shift_description": "Turno",
+                "taxa_ausencia": "Ausência (%)",
+            },
+        )
+        fig.update_traces(
+            texttemplate="%{text:.1f}%",
+            textposition="outside",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        worst_shift = shift_df.loc[shift_df["taxa_ausencia"].idxmax()]
+        st.info(
+            f"O turno com maior índice de ausência é "
+            f"**{worst_shift['shift_description']}** "
+            f"({worst_shift['taxa_ausencia']:.1f}% em "
+            f"{int(worst_shift['agendamentos'])} agendamentos)."
+        )
 
     st.markdown(
         '<div class="section-title">⏰ Horário das reservas</div>',
@@ -1301,7 +1444,74 @@ with tab3:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Relação entre satisfação e desperdício removida conforme solicitação
+        st.markdown(
+            '<div class="section-title">🔗 Satisfação e desperdício</div>',
+            unsafe_allow_html=True,
+        )
+
+        waste_by_service = (
+            df_sched.dropna(
+                subset=["menu_date", "menu_description", "total_food_waste_kg"]
+            )
+            .groupby(["menu_date", "menu_description"], dropna=False)
+            .agg(desperdicio_kg=("total_food_waste_kg", "max"))
+            .reset_index()
+            .groupby("menu_description", dropna=False)
+            .agg(
+                desperdicio_medio_kg=("desperdicio_kg", "mean"),
+                servicos_com_desperdicio=("menu_date", "nunique"),
+            )
+            .reset_index()
+        )
+
+        quality_df = satisfaction_menu.merge(
+            waste_by_service,
+            on="menu_description",
+            how="inner",
+        ).dropna(
+            subset=["nota_media", "desperdicio_medio_kg"]
+        )
+
+        if len(quality_df) >= 2:
+            quality_corr = quality_df["nota_media"].corr(
+                quality_df["desperdicio_medio_kg"]
+            )
+
+            fig = px.scatter(
+                quality_df,
+                x="desperdicio_medio_kg",
+                y="nota_media",
+                size="avaliacoes",
+                hover_name="menu_description",
+                text="menu_description",
+                title="Relação entre nota média e desperdício por cardápio",
+                labels={
+                    "desperdicio_medio_kg": "Desperdício médio por serviço (kg)",
+                    "nota_media": "Nota média",
+                    "avaliacoes": "Avaliações",
+                },
+            )
+            fig.update_traces(textposition="top center")
+            st.plotly_chart(fig, use_container_width=True)
+
+            if abs(quality_corr) < 0.2:
+                relation = "fraca ou inexistente"
+            elif quality_corr > 0:
+                relation = "positiva"
+            else:
+                relation = "negativa"
+
+            st.info(
+                f"A correlação de Pearson entre nota e desperdício é "
+                f"**{quality_corr:.2f}**, indicando uma relação "
+                f"**{relation}**. Isso descreve associação no período e "
+                "não prova causalidade."
+            )
+        else:
+            st.info(
+                "Não há cardápios suficientes com avaliações e desperdício "
+                "registrados para calcular a relação."
+            )
 
     else:
         st.info(

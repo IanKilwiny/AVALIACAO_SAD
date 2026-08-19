@@ -37,12 +37,16 @@ Executar
 streamlit run app.py
 ```
 
-O aplicativo usa o arquivo `rucedro3.csv`, que deve ficar na mesma pasta do
-`app.py`. Para recriar o ambiente com as versões atuais:
+Para recriar o ambiente com as versões atuais:
 
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 streamlit run app.py
 ```
+
+O aplicativo usa o arquivo `rucedro3.csv`, que deve ficar na mesma pasta do
+`app.py`. 
+
+
 

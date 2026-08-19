@@ -110,6 +110,26 @@ def load_data(path):
         if col in df.columns:
             df[col] = df[col].astype("string")
 
+    # Normalizar coluna de aluno de república para 'Sim' / 'Não'
+    if "is_republic_student" in df.columns:
+        original = df["is_republic_student"].astype("string").str.strip()
+        mapped = original.str.lower().map(
+            {
+                "sim": "Sim",
+                "s": "Sim",
+                "yes": "Sim",
+                "true": "Sim",
+                "1": "Sim",
+                "não": "Não",
+                "nao": "Não",
+                "n": "Não",
+                "no": "Não",
+                "false": "Não",
+                "0": "Não",
+            }
+        )
+        df["is_republic_student"] = mapped.where(mapped.notna(), original)
+
     # Indicadores
     df["present"] = df["reservation_status"].eq("Presente")
     df["absent"] = df["reservation_status"].eq("Ausente")
@@ -449,12 +469,11 @@ with g3:
 # ABAS PRINCIPAIS
 # ============================================================
 
-tab1, tab2, tab3, tab4 = st.tabs(
+tab1, tab2, tab3 = st.tabs(
     [
         "👥 Perfil e utilização",
         "📅 Demanda e operação",
         "🍛 Cardápio, desperdício e satisfação",
-        "📋 Dados detalhados",
     ]
 )
 
@@ -600,7 +619,7 @@ with tab1:
         * 100
     )
 
-    r1, r2 = st.columns(2)
+    r1 = st.columns(1)[0]
 
     with r1:
         fig = px.pie(
@@ -609,24 +628,6 @@ with tab1:
             values="reservas",
             hole=0.5,
             title="Distribuição das reservas por situação de moradia",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with r2:
-        fig = px.bar(
-            republic_df,
-            x="is_republic_student",
-            y="taxa_ausencia",
-            text="taxa_ausencia",
-            title="Taxa de ausência: república × não república",
-            labels={
-                "is_republic_student": "Aluno de república?",
-                "taxa_ausencia": "Ausência (%)",
-            },
-        )
-        fig.update_traces(
-            texttemplate="%{text:.1f}%",
-            textposition="outside",
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -850,8 +851,6 @@ with tab2:
                 "Quarta-feira",
                 "Quinta-feira",
                 "Sexta-feira",
-                "Sábado",
-                "Domingo",
             ]
             if d in heatmap_pivot.index
         ]
@@ -1302,55 +1301,7 @@ with tab3:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Relação satisfação x desperdício
-        relation = (
-            df_sched.groupby(
-                ["reservation_date", "menu_description"],
-                dropna=False,
-            )
-            .agg(
-                nota_satisfacao=("review_score", "mean"),
-                desperdicio_kg=("total_food_waste_kg", "max"),
-            )
-            .reset_index()
-            .dropna()
-        )
-
-        if len(relation) >= 3:
-            try:
-                fig = px.scatter(
-                    relation,
-                    x="nota_satisfacao",
-                    y="desperdicio_kg",
-                    hover_data=["menu_description", "reservation_date"],
-                    trendline="ols",
-                    title="Relação entre satisfação e desperdício",
-                    labels={
-                        "nota_satisfacao": "Nota média",
-                        "desperdicio_kg": "Desperdício (kg)",
-                    },
-                )
-            except Exception as e:
-                # If statsmodels isn't installed (required for trendline="ols"),
-                # fall back to a scatter without the trendline and inform the user.
-                st.warning(
-                    "Trendline disabled: biblioteca 'statsmodels' não encontrada.\n"
-                    "Para ativar o ajuste de tendência, ative o venv e execute:\n"
-                    "venv/bin/pip install statsmodels"
-                )
-                fig = px.scatter(
-                    relation,
-                    x="nota_satisfacao",
-                    y="desperdicio_kg",
-                    hover_data=["menu_description", "reservation_date"],
-                    title="Relação entre satisfação e desperdício",
-                    labels={
-                        "nota_satisfacao": "Nota média",
-                        "desperdicio_kg": "Desperdício (kg)",
-                    },
-                )
-
-            st.plotly_chart(fig, use_container_width=True)
+        # Relação entre satisfação e desperdício removida conforme solicitação
 
     else:
         st.info(
@@ -1447,11 +1398,7 @@ with tab3:
             * 100
         )
 
-        st.dataframe(
-            reason_df,
-            use_container_width=True,
-            hide_index=True,
-        )
+        # tabela removida conforme solicitação: exibição em tabela desativada
 
     else:
         st.info(
@@ -1536,84 +1483,9 @@ with ins3:
     else:
         st.info("Sem dados suficientes para avaliar os cardápios.")
 
-# ============================================================
-# QUALIDADE DOS DADOS
-# ============================================================
+# Qualidade dos dados removida conforme solicitação (tabelas/indicadores)
 
-st.markdown(
-    '<div class="section-title">🔎 Qualidade e disponibilidade dos dados</div>',
-    unsafe_allow_html=True,
-)
-
-quality = pd.DataFrame(
-    {
-        "Indicador": [
-            "Alunos únicos",
-            "Agendamentos",
-            "Avaliações",
-            "Registros com desperdício",
-            "Cursos",
-            "Tipos de refeição",
-        ],
-        "Quantidade": [
-            filtered_df["student_id"].nunique(),
-            df_sched["scheduling_id"].nunique(),
-            df_sched["review_score"].notna().sum(),
-            df_sched["total_food_waste_kg"].notna().sum(),
-            df_sched["course_description"].nunique(),
-            df_sched["meal_type"].nunique(),
-        ],
-    }
-)
-
-st.dataframe(
-    quality,
-    use_container_width=True,
-    hide_index=True,
-)
-
-if tempo_medio_antecedencia is None:
-    st.warning(
-        "A coluna advance_hours possui valores fora de uma faixa temporal "
-        "válida para antecedência. Por isso, a dashboard não apresenta "
-        "uma média potencialmente enganosa."
-    )
-
-# ============================================================
-# DADOS DETALHADOS
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">📋 Dados detalhados</div>',
-    unsafe_allow_html=True,
-)
-
-show_columns = [
-    "reservation_date",
-    "reservation_time",
-    "student_name",
-    "course_description",
-    "shift_description",
-    "is_republic_student",
-    "reservation_status",
-    "meal_type",
-
-    "absence_justification",
-    "student_justification",
-    "review_score",
-    "total_food_waste_kg",
-]
-
-show_columns = [
-    col for col in show_columns
-    if col in filtered_df.columns
-]
-
-st.dataframe(
-    filtered_df[show_columns],
-    use_container_width=True,
-    hide_index=True,
-)
+# Aba de dados detalhados removida conforme solicitação (tabela oculta)
 
 # ============================================================
 # DOWNLOAD

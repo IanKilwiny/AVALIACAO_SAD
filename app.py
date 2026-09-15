@@ -146,9 +146,7 @@ def load_data(path):
         1: "Terça-feira",
         2: "Quarta-feira",
         3: "Quinta-feira",
-        4: "Sexta-feira",
-        5: "Sábado",
-        6: "Domingo",
+        4: "Sexta-feira"
     }
 
     df["day_number"] = df["reservation_date"].dt.dayofweek
@@ -159,9 +157,7 @@ def load_data(path):
         "Terça-feira",
         "Quarta-feira",
         "Quinta-feira",
-        "Sexta-feira",
-        "Sábado",
-        "Domingo",
+        "Sexta-feira"
     ]
 
     df["day_of_week"] = pd.Categorical(
@@ -340,6 +336,8 @@ media_reservas_aluno = (
     else 0
 )
 
+# Medir Taxa de Comparecimento
+
 presentes = int(df_sched["present"].sum())
 faltas = int(df_sched["absent"].sum())
 cancelados = int(df_sched["cancelled"].sum())
@@ -392,23 +390,21 @@ with cols[1]:
     st.metric(
         "Compareceram",
         f"{presentes:,}".replace(",", "."),
-        f"{taxa_comparecimento:.1f}%",
+      
     )
 
 with cols[2]:
     st.metric(
         "Faltaram",
         f"{faltas:,}".replace(",", "."),
-        f"{taxa_ausencia:.1f}%",
-        delta_color="inverse",
+       
     )
 
 with cols[3]:
     st.metric(
         "Cancelamentos",
         f"{cancelados:,}".replace(",", "."),
-        f"{taxa_cancelamento:.1f}%",
-        delta_color="inverse",
+       
     )
 
 with cols[4]:
@@ -416,6 +412,97 @@ with cols[4]:
         "Média reservas/aluno",
         f"{media_reservas_aluno:.2f}",
     )
+
+# ============================================================
+# PRINCIPAIS DESCOBERTAS
+# ============================================================
+
+st.markdown("---")
+st.markdown(
+    '<div class="section-title">🧠 Principais descobertas do período</div>',
+    unsafe_allow_html=True,
+)
+
+ins1, ins2, ins3 = st.columns(3)
+
+# Maior demanda por dia
+daily_summary = (
+    df_sched.groupby("reservation_date")
+    .size()
+    .reset_index(name="reservas")
+)
+
+with ins1:
+    if not daily_summary.empty:
+        peak = daily_summary.loc[daily_summary["reservas"].idxmax()]
+        st.info(
+            f"📈 **Maior demanda diária:** "
+            f"{peak['reservation_date'].strftime('%d/%m/%Y')} "
+            f"com **{int(peak['reservas'])} reservas**."
+        )
+    else:
+        st.info("Sem dados suficientes para identificar o pico.")
+
+# Maior taxa de ausência por tipo de refeição
+meal_summary = (
+    df_sched.groupby("meal_type")
+    .agg(
+        reservas=("scheduling_id", "count"),
+        faltas=("absent", "sum"),
+    )
+    .reset_index()
+)
+
+if not meal_summary.empty:
+    meal_summary["taxa"] = (
+        meal_summary["faltas"]
+        / meal_summary["reservas"].replace(0, pd.NA)
+        * 100
+    )
+
+with ins2:
+    if not meal_summary.empty:
+        worst_meal = meal_summary.loc[
+            meal_summary["taxa"].idxmax()
+        ]
+        st.warning(
+            f"⚠️ **Maior taxa de ausência:** "
+            f"{worst_meal['meal_type']} "
+            f"({worst_meal['taxa']:.1f}%)."
+        )
+    else:
+        st.warning(
+            "Sem dados suficientes para avaliar as refeições."
+        )
+
+# Cardápio com maior ausência
+menu_discovery = (
+    df_sched.groupby("menu_description", dropna=False)
+    .agg(
+        reservas=("scheduling_id", "count"),
+        faltas=("absent", "sum"),
+    )
+    .reset_index()
+)
+menu_discovery["taxa_ausencia"] = (
+    menu_discovery["faltas"]
+    / menu_discovery["reservas"].replace(0, pd.NA)
+    * 100
+)
+menu_valid = menu_discovery[menu_discovery["reservas"] >= 2].copy()
+
+with ins3:
+    if not menu_valid.empty:
+        worst_menu = menu_valid.loc[
+            menu_valid["taxa_ausencia"].idxmax()
+        ]
+        st.warning(
+            f"🍽️ **Maior ausência em cardápio:** "
+            f"{worst_menu['menu_description']} "
+            f"({worst_menu['taxa_ausencia']:.1f}%)."
+        )
+    else:
+        st.info("Sem dados suficientes para avaliar os cardápios.")
 
 # ============================================================
 # TAXAS
@@ -469,178 +556,30 @@ with g3:
 # ABAS PRINCIPAIS
 # ============================================================
 
-tab1, tab2, tab3 = st.tabs(
+tab2, tab3, tab4, tab5 = st.tabs(
     [
-        "👥 Perfil e utilização",
-        "📅 Demanda e operação",
-        "🍛 Cardápio, desperdício e satisfação",
+    
+        "Demanda e operação",
+        "Cardápio",
+        "Ausência e Desperdício",
+        "Satisfação"
     ]
 )
 
-# ============================================================
-# ABA 1 — PERFIL
-# ============================================================
 
-with tab1:
 
-    st.markdown(
-        '<div class="section-title">👥 Perfil dos usuários do RU</div>',
-        unsafe_allow_html=True,
-    )
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-        course_df = (
-            df_sched[df_sched["present"]]
-            .groupby("course_description", dropna=False)
-            .agg(
-                refeicoes=("scheduling_id", "count"),
-                alunos=("student_id", "nunique"),
-            )
-            .reset_index()
-            .sort_values("refeicoes", ascending=False)
-            .head(10)
-        )
-
-        fig = px.bar(
-            course_df.sort_values("refeicoes"),
-            x="refeicoes",
-            y="course_description",
-            orientation="h",
-            text="refeicoes",
-            title="Top 10 cursos por refeições consumidas",
-            labels={
-                "refeicoes": "Refeições consumidas",
-                "course_description": "Curso",
-            },
-        )
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-    with c2:
-        rep_df = (
-            df_filtered
-            if False
-            else filtered_df
-        )
-
-        rep_usage = (
-            rep_df.groupby("is_republic_student", dropna=False)
-            .agg(
-                alunos=("student_id", "nunique"),
-                presentes=("present", "sum"),
-                agendamentos=("scheduling_id", "count"),
-            )
-            .reset_index()
-        )
-
-        rep_usage["refeicoes_por_aluno"] = (
-            rep_usage["presentes"] / rep_usage["alunos"].replace(0, pd.NA)
-        )
-
-        fig = px.bar(
-            rep_usage,
-            x="is_republic_student",
-            y="refeicoes_por_aluno",
-            text="refeicoes_por_aluno",
-            title="Média de refeições consumidas por aluno",
-            labels={
-                "is_republic_student": "Aluno de república?",
-                "refeicoes_por_aluno": "Refeições por aluno",
-            },
-        )
-        fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown(
-        '<div class="section-title">🎓 Ausência por curso</div>',
-        unsafe_allow_html=True,
-    )
-
-    course_absence = (
-        df_sched.groupby("course_description", dropna=False)
-        .agg(
-            agendamentos=("scheduling_id", "count"),
-            faltas=("absent", "sum"),
-            presentes=("present", "sum"),
-        )
-        .reset_index()
-    )
-
-    course_absence["taxa_ausencia"] = (
-        course_absence["faltas"]
-        / course_absence["agendamentos"].replace(0, pd.NA)
-        * 100
-    )
-
-    course_absence = course_absence.sort_values(
-        "taxa_ausencia",
-        ascending=False,
-    )
-
-    fig = px.bar(
-        course_absence,
-        x="taxa_ausencia",
-        y="course_description",
-        orientation="h",
-        text="taxa_ausencia",
-        title="Taxa de ausência por curso",
-        labels={
-            "taxa_ausencia": "Ausência (%)",
-            "course_description": "Curso",
-        },
-    )
-    fig.update_traces(
-        texttemplate="%{text:.1f}%",
-        textposition="outside",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown(
-        '<div class="section-title">🏠 Perfil de república</div>',
-        unsafe_allow_html=True,
-    )
-
-    republic_df = (
-        filtered_df.groupby("is_republic_student", dropna=False)
-        .agg(
-            alunos=("student_id", "nunique"),
-            reservas=("scheduling_id", "count"),
-            presentes=("present", "sum"),
-            faltas=("absent", "sum"),
-        )
-        .reset_index()
-    )
-
-    republic_df["taxa_ausencia"] = (
-        republic_df["faltas"]
-        / republic_df["reservas"].replace(0, pd.NA)
-        * 100
-    )
-
-    r1 = st.columns(1)[0]
-
-    with r1:
-        fig = px.pie(
-            republic_df,
-            names="is_republic_student",
-            values="reservas",
-            hole=0.5,
-            title="Alunos de república (Sim) que reservam vs Alunos não de república (Não)",
-        )
-        st.plotly_chart(fig, use_container_width=True)
 
 # ============================================================
 # ABA 2 — DEMANDA E OPERAÇÃO
 # ============================================================
 
 with tab2:
-
     st.markdown(
-        '<div class="section-title">📅 Evolução da demanda</div>',
-        unsafe_allow_html=True,
-    )
+            '<div class="section-title">📊 Evolução das demandas</div>',
+            unsafe_allow_html=True,
+        )
+    
+
 
     daily = (
         df_sched.groupby("reservation_date")
@@ -660,7 +599,7 @@ with tab2:
         y=["agendamentos", "presentes", "faltas", "cancelados"],
         markers=True,
         render_mode="svg",
-        title="Evolução diária de reservas, presença, faltas e cancelamentos",
+        title="Evolução diária das reservas",
         labels={
             "reservation_date": "Data",
             "value": "Quantidade",
@@ -669,10 +608,7 @@ with tab2:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown(
-        '<div class="section-title">📆 Sazonalidade mensal</div>',
-        unsafe_allow_html=True,
-    )
+
 
     monthly = (
         df_sched.groupby("year_month")
@@ -704,10 +640,6 @@ with tab2:
     production_peak = monthly.loc[monthly["presentes"].idxmax()]
     production_low = monthly.loc[monthly["presentes"].idxmin()]
 
-    st.markdown(
-        '<div class="section-title">🍲 Planejamento de produção e ocupação</div>',
-        unsafe_allow_html=True,
-    )
 
     p1, p2 = st.columns(2)
 
@@ -722,7 +654,7 @@ with tab2:
             y="presentes",
             color="situacao",
             text="presentes",
-            title="Refeições servidas por mês",
+            title="Quantidade de refeições servidas por mês",
             labels={
                 "year_month": "Mês",
                 "presentes": "Refeições servidas",
@@ -768,20 +700,6 @@ with tab2:
             daily_occupation["servidas"] <= low_occupation_limit
         ]
 
-        fig = px.scatter(
-            daily_occupation,
-            x="reservation_date",
-            y="servidas",
-            size="reservas",
-            color="servidas",
-            title="Dias de baixa ocupação",
-            labels={
-                "reservation_date": "Data",
-                "servidas": "Refeições servidas",
-                "reservas": "Reservas",
-            },
-            color_continuous_scale="Blues",
-        )
         fig.add_hline(
             y=low_occupation_limit,
             line_dash="dash",
@@ -818,19 +736,7 @@ with tab2:
             * 100
         )
 
-        fig = px.bar(
-            weekday_df,
-            x="day_of_week",
-            y="faltas",
-            text="faltas",
-            title="Dia da semana com mais faltas",
-            labels={
-                "day_of_week": "Dia",
-                "faltas": "Faltas",
-            },
-        )
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        
 
     with d2:
         meal_df = (
@@ -864,13 +770,9 @@ with tab2:
             texttemplate="%{text:.1f}%",
             textposition="outside",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        
 
-    st.markdown(
-        '<div class="section-title">🕒 Ausência por turno</div>',
-        unsafe_allow_html=True,
-    )
-
+  
     shift_df = (
         df_sched.groupby("shift_description", dropna=False)
         .agg(
@@ -887,37 +789,9 @@ with tab2:
         * 100
     )
 
-    if not shift_df.empty:
-        fig = px.bar(
-            shift_df.sort_values("taxa_ausencia"),
-            x="taxa_ausencia",
-            y="shift_description",
-            orientation="h",
-            text="taxa_ausencia",
-            title="Índice de ausência por turno",
-            labels={
-                "shift_description": "Turno",
-                "taxa_ausencia": "Ausência (%)",
-            },
-        )
-        fig.update_traces(
-            texttemplate="%{text:.1f}%",
-            textposition="outside",
-        )
-        st.plotly_chart(fig, use_container_width=True)
 
-        worst_shift = shift_df.loc[shift_df["taxa_ausencia"].idxmax()]
-        st.info(
-            f"O turno com maior índice de ausência é "
-            f"**{worst_shift['shift_description']}** "
-            f"({worst_shift['taxa_ausencia']:.1f}% em "
-            f"{int(worst_shift['agendamentos'])} agendamentos)."
-        )
 
-    st.markdown(
-        '<div class="section-title">⏰ Horário das reservas</div>',
-        unsafe_allow_html=True,
-    )
+    
 
     hourly = (
         df_sched.dropna(subset=["reservation_hour"])
@@ -937,230 +811,113 @@ with tab2:
             * 100
         )
 
-        fig = px.bar(
-            hourly,
-            x="reservation_hour",
-            y="reservas",
-            text="reservas",
-            title="Demanda por hora da reserva",
-            labels={
-                "reservation_hour": "Hora",
-                "reservas": "Reservas",
-            },
+        meal_df = (
+            df_sched.groupby("meal_description", dropna=False)
+            .agg(
+                reservas=("scheduling_id", "count"),
+                presentes=("present", "sum"),
+                faltas=("absent", "sum"),
+            )
+            .reset_index()
         )
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-        fig = px.line(
-            hourly,
-            x="reservation_hour",
-            y="taxa_ausencia",
-            markers=True,
-            title="Taxa de ausência por hora da reserva",
-            labels={
-                "reservation_hour": "Hora",
-                "taxa_ausencia": "Ausência (%)",
-            },
+    
+        meal_df["taxa_ausencia"] = (
+            meal_df["faltas"]
+            / meal_df["reservas"].replace(0, pd.NA)
+            * 100
         )
-        st.plotly_chart(fig, use_container_width=True)
+    
+        m1, m2 = st.columns(2)
+    
+        with m1:
+            fig = px.bar(
+                meal_df.sort_values("reservas"),
+                x="reservas",
+                y="meal_description",
+                orientation="h",
+                text="reservas",
+                title="Reservas por tipo de refeição",
+                labels={
+                    "meal_description": "Refeição",
+                    "reservas": "Reservas",
+                },
+            )
+            fig.update_traces(textposition="outside")
+            st.plotly_chart(fig, use_container_width=True)
+    
+        with m2:
+            fig = px.bar(
+                meal_df.sort_values("taxa_ausencia"),
+                x="meal_description",
+                y="taxa_ausencia",
+                text="taxa_ausencia",
+                title="Ausência por tipo de refeição",
+                labels={
+                    "meal_description": "Refeição",
+                    "taxa_ausencia": "Ausência (%)",
+                },
+            )
+            fig.update_traces(
+                texttemplate="%{text:.1f}%",
+                textposition="outside",
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-    # Heatmap sem filtro de comida
-    st.markdown(
-        '<div class="section-title">🔥 Mapa de calor da demanda</div>',
-        unsafe_allow_html=True,
-    )
 
-    heatmap = (
-        df_sched.groupby(
-            ["day_of_week", "meal_type"],
-            observed=False,
-        )
-        .size()
-        .reset_index(name="reservas")
-    )
+        meal_reservations = (
+               df_sched.groupby("meal_type", dropna=False)
+               .agg(
+                   reservas=("scheduling_id", "count"),
+                   presentes=("present", "sum"),
+                   faltas=("absent", "sum"),
+               )
+               .reset_index()
+               .dropna(subset=["meal_type"])
+               .sort_values("reservas", ascending=False)
+           )
 
-    heatmap_pivot = heatmap.pivot(
-        index="day_of_week",
-        columns="meal_type",
-        values="reservas",
-    ).fillna(0)
-
-    heatmap_pivot = heatmap_pivot.reindex(
-        [
-            d
-            for d in [
-                "Segunda-feira",
-                "Terça-feira",
-                "Quarta-feira",
-                "Quinta-feira",
-                "Sexta-feira",
-            ]
-            if d in heatmap_pivot.index
-        ]
-    )
-
-    if not heatmap_pivot.empty:
-        fig = px.imshow(
-            heatmap_pivot,
-            text_auto=True,
-            aspect="auto",
-            title="Reservas por dia da semana e tipo de refeição",
-            labels={
-                "x": "Tipo de refeição",
-                "y": "Dia da semana",
-                "color": "Reservas",
-            },
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if not meal_reservations.empty:
+    
+            r1, r2 = st.columns(2)
+    
+            with r1:
+               pass
+    
+            with r2:
+                fig = px.pie(
+                    meal_reservations,
+                    names="meal_type",
+                    values="reservas",
+                    hole=0.40,
+                    title="Participação das refeições nas reservas",
+                )
+                st.plotly_chart(fig, use_container_width=True)
+    
+            # Destaques de lanche e almoço
+            lanche_mask = meal_reservations["meal_type"].str.contains(
+                "lanche",
+                case=False,
+                na=False,
+            )
+    
+            lanches = meal_reservations[lanche_mask].copy()
+            almoco = meal_reservations[
+                meal_reservations["meal_type"].str.contains(
+                    "almoço|almoco",
+                    case=False,
+                    na=False,
+                    regex=True,
+                )
+            ].copy()
+    
+            d1, d2 = st.columns(2)
+  
 
 # ============================================================
 # ABA 3 — CARDÁPIO, DESPERDÍCIO E SATISFAÇÃO
 # ============================================================
 
 with tab3:
-
-    st.markdown(
-        '<div class="section-title">🍛 Análise por tipo de refeição</div>',
-        unsafe_allow_html=True,
-    )
-
-    meal_df = (
-        df_sched.groupby("meal_description", dropna=False)
-        .agg(
-            reservas=("scheduling_id", "count"),
-            presentes=("present", "sum"),
-            faltas=("absent", "sum"),
-        )
-        .reset_index()
-    )
-
-    meal_df["taxa_ausencia"] = (
-        meal_df["faltas"]
-        / meal_df["reservas"].replace(0, pd.NA)
-        * 100
-    )
-
-    m1, m2 = st.columns(2)
-
-    with m1:
-        fig = px.bar(
-            meal_df.sort_values("reservas"),
-            x="reservas",
-            y="meal_description",
-            orientation="h",
-            text="reservas",
-            title="Reservas por tipo de refeição",
-            labels={
-                "meal_description": "Refeição",
-                "reservas": "Reservas",
-            },
-        )
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-    with m2:
-        fig = px.bar(
-            meal_df.sort_values("taxa_ausencia"),
-            x="meal_description",
-            y="taxa_ausencia",
-            text="taxa_ausencia",
-            title="Ausência por tipo de refeição",
-            labels={
-                "meal_description": "Refeição",
-                "taxa_ausencia": "Ausência (%)",
-            },
-        )
-        fig.update_traces(
-            texttemplate="%{text:.1f}%",
-            textposition="outside",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown(
-        '<div class="section-title">🥪🍛 Refeições mais reservadas</div>',
-        unsafe_allow_html=True,
-    )
-
-    meal_reservations = (
-        df_sched.groupby("meal_type", dropna=False)
-        .agg(
-            reservas=("scheduling_id", "count"),
-            presentes=("present", "sum"),
-            faltas=("absent", "sum"),
-        )
-        .reset_index()
-        .dropna(subset=["meal_type"])
-        .sort_values("reservas", ascending=False)
-    )
-
-    if not meal_reservations.empty:
-
-        r1, r2 = st.columns(2)
-
-        with r1:
-            fig = px.bar(
-                meal_reservations.sort_values("reservas"),
-                x="reservas",
-                y="meal_type",
-                orientation="h",
-                text="reservas",
-                title="Quantidade de reservas por refeição",
-                labels={
-                    "meal_type": "Tipo de refeição",
-                    "reservas": "Reservas",
-                },
-            )
-            fig.update_traces(textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
-
-        with r2:
-            fig = px.pie(
-                meal_reservations,
-                names="meal_type",
-                values="reservas",
-                hole=0.40,
-                title="Participação das refeições nas reservas",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Destaques de lanche e almoço
-        lanche_mask = meal_reservations["meal_type"].str.contains(
-            "lanche",
-            case=False,
-            na=False,
-        )
-
-        lanches = meal_reservations[lanche_mask].copy()
-        almoco = meal_reservations[
-            meal_reservations["meal_type"].str.contains(
-                "almoço|almoco",
-                case=False,
-                na=False,
-                regex=True,
-            )
-        ].copy()
-
-        d1, d2 = st.columns(2)
-
-        with d1:
-            if not lanches.empty:
-                fig = px.bar(
-                    lanches.sort_values("reservas"),
-                    x="reservas",
-                    y="meal_type",
-                    orientation="h",
-                    text="reservas",
-                    title="🥪 Lanches mais reservados",
-                    labels={
-                        "meal_type": "Lanche",
-                        "reservas": "Reservas",
-                    },
-                )
-                fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Não há registros de lanches no período.")
-
 
     st.markdown(
         '<div class="section-title">🍽️ Desempenho dos cardápios</div>',
@@ -1232,88 +989,191 @@ with tab3:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # --------------------------------------------------------
-    # DESPERDÍCIO
-    # --------------------------------------------------------
+   
 
-    st.markdown(
-        '<div class="section-title">♻️ Desperdício de alimentos</div>',
-        unsafe_allow_html=True,
-    )
 
-    waste_base = df_sched.dropna(
-        subset=["total_food_waste_kg"]
-    ).copy()
+ 
+   
 
-    if not waste_base.empty:
+# --------------------------------------------------------
+        # DESPERDÍCIO
+        # --------------------------------------------------------
+    
 
-        waste_daily = (
-            waste_base.groupby("reservation_date")
-            .agg(
-                desperdicio_kg=("total_food_waste_kg", "max"),
-                refeicoes_servidas=("present", "sum"),
+with tab4:
+
+         # --------------------------------------------------------
+            # MOTIVOS DE AUSÊNCIA
+            # --------------------------------------------------------
+        
+            st.markdown(
+                '<div class="section-title">❌ Motivos das ausências</div>',
+                unsafe_allow_html=True,
             )
-            .reset_index()
-        )
-
-        waste_daily["kg_por_refeicao"] = (
-            waste_daily["desperdicio_kg"]
-            / waste_daily["refeicoes_servidas"].replace(0, pd.NA)
-        )
-
-        w1, w2, w3 = st.columns(3)
-
-        with w1:
-            total_waste = waste_daily["desperdicio_kg"].sum()
-            st.metric(
-                "Desperdício registrado",
-                f"{total_waste:.2f} kg",
-            )
-
-        with w2:
-            valid_waste = waste_daily["kg_por_refeicao"].dropna()
-            if not valid_waste.empty:
-                st.metric(
-                    "Kg desperdiçados/refeição",
-                    f"{valid_waste.mean():.3f} kg",
+        
+            # Usa a justificativa disponível. Quando as duas colunas existem,
+            # prioriza a justificativa de ausência e utiliza a justificativa do
+            # estudante como complemento.
+            absence_data = df_sched[df_sched["absent"]].copy()
+        
+            if not absence_data.empty:
+        
+                if (
+                    "absence_justification" in absence_data.columns
+                    and "student_justification" in absence_data.columns
+                ):
+                    absence_data["absence_reason"] = (
+                        absence_data["absence_justification"]
+                        .fillna(absence_data["student_justification"])
+                    )
+                elif "absence_justification" in absence_data.columns:
+                    absence_data["absence_reason"] = (
+                        absence_data["absence_justification"]
+                    )
+                elif "student_justification" in absence_data.columns:
+                    absence_data["absence_reason"] = (
+                        absence_data["student_justification"]
+                    )
+                else:
+                    absence_data["absence_reason"] = pd.NA
+        
+                absence_data["absence_reason"] = (
+                    absence_data["absence_reason"]
+                    .astype("string")
+                    .str.strip()
                 )
+        
+                # Ausências sem justificativa entram como uma categoria própria.
+                absence_data["absence_reason"] = (
+                    absence_data["absence_reason"]
+                    .fillna("Sem justificativa")
+                    .replace("", "Sem justificativa")
+                )
+        
+                reason_df = (
+                    absence_data["absence_reason"]
+                    .value_counts()
+                    .reset_index()
+                )
+                reason_df.columns = ["Motivo", "Quantidade"]
+        
+                a1, a2 = st.columns(2)
+        
+                with a1:
+                    fig = px.pie(
+                        reason_df,
+                        names="Motivo",
+                        values="Quantidade",
+                        hole=0.40,
+                        title="Distribuição dos motivos das ausências",
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+        
+                with a2:
+                    fig = px.bar(
+                        reason_df.sort_values("Quantidade"),
+                        x="Quantidade",
+                        y="Motivo",
+                        orientation="h",
+                        text="Quantidade",
+                        title="Quantidade de ausências por motivo",
+                        labels={
+                            "Motivo": "Motivo",
+                            "Quantidade": "Ausências",
+                        },
+                    )
+                    fig.update_traces(textposition="outside")
+                    st.plotly_chart(fig, use_container_width=True)
+        
+                # Percentuais
+                reason_df["Percentual"] = (
+                    reason_df["Quantidade"]
+                    / reason_df["Quantidade"].sum()
+                    * 100
+                )
+        
+                # tabela removida conforme solicitação: exibição em tabela desativada
+        
             else:
-                st.metric(
-                    "Kg desperdiçados/refeição",
-                    "N/D",
+                st.info(
+                    "Não existem ausências no período selecionado."
                 )
-
-        with w3:
-            max_waste = waste_daily["desperdicio_kg"].max()
-            st.metric(
-                "Maior desperdício diário",
-                f"{max_waste:.2f} kg",
+     
+            st.markdown(
+            '<div class="section-title">♻️ Desperdício de alimentos</div>',
+            unsafe_allow_html=True,
             )
+    
+            waste_base = df_sched.dropna(
+                subset=["total_food_waste_kg"]
+            ).copy()
+    
+            if not waste_base.empty:
+    
+                waste_daily = (
+                    waste_base.groupby("reservation_date")
+                    .agg(
+                        desperdicio_kg=("total_food_waste_kg", "max"),
+                        refeicoes_servidas=("present", "sum"),
+                    )
+                    .reset_index()
+                )
+    
+            waste_daily["kg_por_refeicao"] = (
+                waste_daily["desperdicio_kg"]
+                / waste_daily["refeicoes_servidas"].replace(0, pd.NA)
+            )
+    
+            w1, w2, w3 = st.columns(3)
+    
+            with w1:
+                total_waste = waste_daily["desperdicio_kg"].sum()
+                st.metric(
+                    "Desperdício registrado",
+                    f"{total_waste:.2f} kg",
+                )
+    
+            with w2:
+                valid_waste = waste_daily["kg_por_refeicao"].dropna()
+                if not valid_waste.empty:
+                    st.metric(
+                        "Kg desperdiçados/refeição",
+                        f"{valid_waste.mean():.3f} kg",
+                    )
+                else:
+                    st.metric(
+                        "Kg desperdiçados/refeição",
+                        "N/D",
+                    )
+    
+            with w3:
+                max_waste = waste_daily["desperdicio_kg"].max()
+                st.metric(
+                    "Maior desperdício diário",
+                    f"{max_waste:.2f} kg",
+                )
+    
+            fig = px.line(
+                waste_daily,
+                x="reservation_date",
+                y="desperdicio_kg",
+                markers=True,
+                title="Evolução do desperdício registrado",
+                labels={
+                    "reservation_date": "Data",
+                    "desperdicio_kg": "Desperdício (kg)",
+                },
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+            # Seção de cardápios por desperdício removida conforme solicitação.
 
-        fig = px.line(
-            waste_daily,
-            x="reservation_date",
-            y="desperdicio_kg",
-            markers=True,
-            title="Evolução do desperdício registrado",
-            labels={
-                "reservation_date": "Data",
-                "desperdicio_kg": "Desperdício (kg)",
-            },
-        )
-        st.plotly_chart(fig, use_container_width=True)
 
-        # Seção de cardápios por desperdício removida conforme solicitação.
+# ============================================================
+# SATISFAÇÃO DO USUÁRIOS
+# ============================================================
 
-    else:
-        st.info(
-            "Não existem registros de desperdício no período selecionado."
-        )
-
-    # --------------------------------------------------------
-    # SATISFAÇÃO
-    # --------------------------------------------------------
-
+with tab5:
     st.markdown(
         '<div class="section-title">⭐ Satisfação dos usuários</div>',
         unsafe_allow_html=True,
@@ -1361,188 +1221,15 @@ with tab3:
             fig.update_traces(textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
-        # Seções de 'Cardápios com melhores avaliações' e
-        # 'Satisfação e desperdício' removidas conforme solicitação.
+            # Seções de 'Cardápios com melhores avaliações' e
+            # 'Satisfação e desperdício' removidas conforme solicitação.
 
     else:
         st.info(
             "Não existem avaliações de satisfação no período selecionado."
         )
+    
 
-    # --------------------------------------------------------
-    # MOTIVOS DE AUSÊNCIA
-    # --------------------------------------------------------
-
-    st.markdown(
-        '<div class="section-title">❌ Motivos das ausências</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Usa a justificativa disponível. Quando as duas colunas existem,
-    # prioriza a justificativa de ausência e utiliza a justificativa do
-    # estudante como complemento.
-    absence_data = df_sched[df_sched["absent"]].copy()
-
-    if not absence_data.empty:
-
-        if (
-            "absence_justification" in absence_data.columns
-            and "student_justification" in absence_data.columns
-        ):
-            absence_data["absence_reason"] = (
-                absence_data["absence_justification"]
-                .fillna(absence_data["student_justification"])
-            )
-        elif "absence_justification" in absence_data.columns:
-            absence_data["absence_reason"] = (
-                absence_data["absence_justification"]
-            )
-        elif "student_justification" in absence_data.columns:
-            absence_data["absence_reason"] = (
-                absence_data["student_justification"]
-            )
-        else:
-            absence_data["absence_reason"] = pd.NA
-
-        absence_data["absence_reason"] = (
-            absence_data["absence_reason"]
-            .astype("string")
-            .str.strip()
-        )
-
-        # Ausências sem justificativa entram como uma categoria própria.
-        absence_data["absence_reason"] = (
-            absence_data["absence_reason"]
-            .fillna("Sem justificativa")
-            .replace("", "Sem justificativa")
-        )
-
-        reason_df = (
-            absence_data["absence_reason"]
-            .value_counts()
-            .reset_index()
-        )
-        reason_df.columns = ["Motivo", "Quantidade"]
-
-        a1, a2 = st.columns(2)
-
-        with a1:
-            fig = px.pie(
-                reason_df,
-                names="Motivo",
-                values="Quantidade",
-                hole=0.40,
-                title="Distribuição dos motivos das ausências",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with a2:
-            fig = px.bar(
-                reason_df.sort_values("Quantidade"),
-                x="Quantidade",
-                y="Motivo",
-                orientation="h",
-                text="Quantidade",
-                title="Quantidade de ausências por motivo",
-                labels={
-                    "Motivo": "Motivo",
-                    "Quantidade": "Ausências",
-                },
-            )
-            fig.update_traces(textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Percentuais
-        reason_df["Percentual"] = (
-            reason_df["Quantidade"]
-            / reason_df["Quantidade"].sum()
-            * 100
-        )
-
-        # tabela removida conforme solicitação: exibição em tabela desativada
-
-    else:
-        st.info(
-            "Não existem ausências no período selecionado."
-        )
-
-# ============================================================
-# RESUMO EXECUTIVO
-# ============================================================
-
-st.markdown("---")
-st.markdown(
-    '<div class="section-title">🧠 Principais descobertas do período</div>',
-    unsafe_allow_html=True,
-)
-
-ins1, ins2, ins3 = st.columns(3)
-
-# Maior demanda por dia
-daily_summary = (
-    df_sched.groupby("reservation_date")
-    .size()
-    .reset_index(name="reservas")
-)
-
-with ins1:
-    if not daily_summary.empty:
-        peak = daily_summary.loc[daily_summary["reservas"].idxmax()]
-        st.info(
-            f"📈 **Maior demanda diária:** "
-            f"{peak['reservation_date'].strftime('%d/%m/%Y')} "
-            f"com **{int(peak['reservas'])} reservas**."
-        )
-    else:
-        st.info("Sem dados suficientes para identificar o pico.")
-
-# Maior taxa de ausência por tipo de refeição
-meal_summary = (
-    df_sched.groupby("meal_type")
-    .agg(
-        reservas=("scheduling_id", "count"),
-        faltas=("absent", "sum"),
-    )
-    .reset_index()
-)
-
-if not meal_summary.empty:
-    meal_summary["taxa"] = (
-        meal_summary["faltas"]
-        / meal_summary["reservas"].replace(0, pd.NA)
-        * 100
-    )
-
-with ins2:
-    if not meal_summary.empty:
-        worst_meal = meal_summary.loc[
-            meal_summary["taxa"].idxmax()
-        ]
-        st.warning(
-            f"⚠️ **Maior taxa de ausência:** "
-            f"{worst_meal['meal_type']} "
-            f"({worst_meal['taxa']:.1f}%)."
-        )
-    else:
-        st.warning(
-            "Sem dados suficientes para avaliar as refeições."
-        )
-
-# Cardápio com maior ausência
-menu_valid = menu_df[menu_df["reservas"] >= 2].copy()
-
-with ins3:
-    if not menu_valid.empty:
-        worst_menu = menu_valid.loc[
-            menu_valid["taxa_ausencia"].idxmax()
-        ]
-        st.warning(
-            f"🍽️ **Maior ausência em cardápio:** "
-            f"{worst_menu['menu_description']} "
-            f"({worst_menu['taxa_ausencia']:.1f}%)."
-        )
-    else:
-        st.info("Sem dados suficientes para avaliar os cardápios.")
 
 # Qualidade dos dados removida conforme solicitação (tabelas/indicadores)
 

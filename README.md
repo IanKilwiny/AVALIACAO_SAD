@@ -45,7 +45,7 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-O aplicativo usa o arquivo `rucedro3.csv`, que deve ficar na mesma pasta do
+- O aplicativo usa o arquivo `rucedro4.csv`, que deve ficar na mesma pasta do
 `app.py`. 
 
 

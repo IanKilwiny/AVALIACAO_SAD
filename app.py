@@ -56,7 +56,7 @@ st.markdown(
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR / "rucedro3.csv"
+DATA_PATH = BASE_DIR / "rucedro4.csv"
 
 
 @st.cache_data
@@ -99,8 +99,8 @@ def load_data(path):
         "reservation_status",
         "was_present",
         "canceled_by_student",
-        "absence_justification",
-        "student_justification",
+        #"absence_justification",
+        #"student_justification",
         "menu_description",
         "meal_description",
         "review_comment",
@@ -1002,102 +1002,7 @@ with tab3:
 
 with tab4:
 
-         # --------------------------------------------------------
-            # MOTIVOS DE AUSÊNCIA
-            # --------------------------------------------------------
         
-            st.markdown(
-                '<div class="section-title">❌ Motivos das ausências</div>',
-                unsafe_allow_html=True,
-            )
-        
-            # Usa a justificativa disponível. Quando as duas colunas existem,
-            # prioriza a justificativa de ausência e utiliza a justificativa do
-            # estudante como complemento.
-            absence_data = df_sched[df_sched["absent"]].copy()
-        
-            if not absence_data.empty:
-        
-                if (
-                    "absence_justification" in absence_data.columns
-                    and "student_justification" in absence_data.columns
-                ):
-                    absence_data["absence_reason"] = (
-                        absence_data["absence_justification"]
-                        .fillna(absence_data["student_justification"])
-                    )
-                elif "absence_justification" in absence_data.columns:
-                    absence_data["absence_reason"] = (
-                        absence_data["absence_justification"]
-                    )
-                elif "student_justification" in absence_data.columns:
-                    absence_data["absence_reason"] = (
-                        absence_data["student_justification"]
-                    )
-                else:
-                    absence_data["absence_reason"] = pd.NA
-        
-                absence_data["absence_reason"] = (
-                    absence_data["absence_reason"]
-                    .astype("string")
-                    .str.strip()
-                )
-        
-                # Ausências sem justificativa entram como uma categoria própria.
-                absence_data["absence_reason"] = (
-                    absence_data["absence_reason"]
-                    .fillna("Sem justificativa")
-                    .replace("", "Sem justificativa")
-                )
-        
-                reason_df = (
-                    absence_data["absence_reason"]
-                    .value_counts()
-                    .reset_index()
-                )
-                reason_df.columns = ["Motivo", "Quantidade"]
-        
-                a1, a2 = st.columns(2)
-        
-                with a1:
-                    fig = px.pie(
-                        reason_df,
-                        names="Motivo",
-                        values="Quantidade",
-                        hole=0.40,
-                        title="Distribuição dos motivos das ausências",
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-        
-                with a2:
-                    fig = px.bar(
-                        reason_df.sort_values("Quantidade"),
-                        x="Quantidade",
-                        y="Motivo",
-                        orientation="h",
-                        text="Quantidade",
-                        title="Quantidade de ausências por motivo",
-                        labels={
-                            "Motivo": "Motivo",
-                            "Quantidade": "Ausências",
-                        },
-                    )
-                    fig.update_traces(textposition="outside")
-                    st.plotly_chart(fig, use_container_width=True)
-        
-                # Percentuais
-                reason_df["Percentual"] = (
-                    reason_df["Quantidade"]
-                    / reason_df["Quantidade"].sum()
-                    * 100
-                )
-        
-                # tabela removida conforme solicitação: exibição em tabela desativada
-        
-            else:
-                st.info(
-                    "Não existem ausências no período selecionado."
-                )
      
             st.markdown(
             '<div class="section-title">♻️ Desperdício de alimentos</div>',
